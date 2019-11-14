@@ -11,13 +11,15 @@ import (
 	"database/sql"
 
 	"github.com/fernet/fernet-go"
+	"github.com/golang/protobuf/proto"
+	"github.com/golang/protobuf/ptypes"
+	"github.com/google/uuid"
 	grafeasConfig "github.com/grafeas/grafeas/go/config"
 	"github.com/grafeas/grafeas/go/name"
 	"github.com/grafeas/grafeas/go/v1beta1/storage"
 	pb "github.com/grafeas/grafeas/proto/v1beta1/grafeas_go_proto"
 	prpb "github.com/grafeas/grafeas/proto/v1beta1/project_go_proto"
 	"github.com/judavi/grafeas-oracle/go/config"
-	"github.com/lib/pq"
 	fieldmaskpb "google.golang.org/genproto/protobuf/field_mask"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
@@ -114,9 +116,9 @@ func createDatabase(source, dbName string) error {
 // CreateProject adds the specified project to the store
 func (pg *OracleDb) CreateProject(ctx context.Context, pID string, p *prpb.Project) (*prpb.Project, error) {
 	_, err := pg.DB.Exec(insertProject, name.FormatProject(pID))
-	if err, ok := err.(*pq.Error); ok {
+	if err, ok := goracle.AsOraErr(err); ok {
 		// Check for unique_violation
-		if err.Code == "23505" {
+		if err.Code() == 1 {
 			return nil, status.Errorf(codes.AlreadyExists, "Project with name %q already exists", pID)
 		} else {
 			log.Println("Failed to insert Project in database", err)
@@ -148,12 +150,12 @@ func (pg *OracleDb) DeleteProject(ctx context.Context, pID string) error {
 func (pg *OracleDb) GetProject(ctx context.Context, pID string) (*prpb.Project, error) {
 
 	pName := name.FormatProject(pID)
-	var exists bool
+	var exists int
 	err := pg.DB.QueryRow(projectExists, pName).Scan(&exists)
 	if err != nil {
 		return nil, status.Error(codes.Internal, "Failed to query Project from database")
 	}
-	if !exists {
+	if exists == 0 {
 		return nil, status.Errorf(codes.NotFound, "Project with name %q does not Exist", pName)
 	}
 	return &prpb.Project{Name: pName}, nil
@@ -166,6 +168,7 @@ func (pg *OracleDb) ListProjects(ctx context.Context, filter string, pageSize in
 	id := decryptInt64(pageToken, pg.paginationKey, 0)
 	rows, err := pg.DB.Query(listProjects, id, pageSize)
 	if err != nil {
+		log.Println(err)
 		return nil, "", status.Error(codes.Internal, "Failed to list Projects from database")
 	}
 	count, err := pg.count(projectCount)
@@ -189,47 +192,182 @@ func (pg *OracleDb) ListProjects(ctx context.Context, filter string, pageSize in
 	if err != nil {
 		return nil, "", status.Error(codes.Internal, "Failed to paginate projects")
 	}
-	return projects, encryptedPage, nil
+
+	return nil, encryptedPage, nil
 }
 
 // CreateNote adds the specified note
 func (pg *OracleDb) CreateNote(ctx context.Context, pID, nID, uID string, n *pb.Note) (*pb.Note, error) {
-	return nil, nil
+	n = proto.Clone(n).(*pb.Note)
+	nName := name.FormatNote(pID, nID)
+	n.Name = nName
+	n.CreateTime = ptypes.TimestampNow()
+
+	_, err := pg.DB.Exec(insertNote, pID, nID, proto.MarshalTextString(n))
+	if err, ok := goracle.AsOraErr(err); ok {
+		// Check for unique_violation
+		if err.Code() == 1 {
+			return nil, status.Errorf(codes.AlreadyExists, "Note with name %q already exists", n.Name)
+		} else {
+			log.Println("Failed to insert Note in database", err)
+			return nil, status.Error(codes.Internal, "Failed to insert Note in database")
+		}
+	}
+	return n, nil
 }
 
 // BatchCreateNotes batch creates the specified notes in memstore.
 func (pg *OracleDb) BatchCreateNotes(ctx context.Context, pID, uID string, notes map[string]*pb.Note) ([]*pb.Note, []error) {
-	return nil, nil
+	clonedNotes := map[string]*pb.Note{}
+	for nID, n := range notes {
+		clonedNotes[nID] = proto.Clone(n).(*pb.Note)
+	}
+	notes = clonedNotes
+
+	errs := []error{}
+	created := []*pb.Note{}
+	for nID, n := range notes {
+		note, err := pg.CreateNote(ctx, pID, nID, uID, n)
+		if err != nil {
+			// Note already exists, skipping.
+			continue
+		} else {
+			created = append(created, note)
+		}
+
+	}
+
+	return created, errs
 }
 
 // DeleteNote deletes the note with the given pID and nID
 func (pg *OracleDb) DeleteNote(ctx context.Context, pID, nID string) error {
+	result, err := pg.DB.Exec(deleteNote, pID, nID)
+	if err != nil {
+		return status.Error(codes.Internal, "Failed to delete Note from database")
+	}
+	count, err := result.RowsAffected()
+	if err != nil {
+		return status.Error(codes.Internal, "Failed to delete Note from database")
+	}
+	if count == 0 {
+		return status.Errorf(codes.NotFound, "Note with name %q/%q does not Exist", pID, nID)
+	}
 	return nil
 }
 
+//TODO
 // UpdateNote updates the existing note with the given pID and nID
 func (pg *OracleDb) UpdateNote(ctx context.Context, pID, nID string, n *pb.Note, mask *fieldmaskpb.FieldMask) (*pb.Note, error) {
-	return nil, nil
+	n = proto.Clone(n).(*pb.Note)
+	nName := name.FormatNote(pID, nID)
+	n.Name = nName
+	// TODO(#312): implement the update operation
+	n.UpdateTime = ptypes.TimestampNow()
+	log.Println(pID)
+	log.Println(nID)
+	rows, err := pg.DB.Query(updateNote, pID, nID, "holalala")
+	defer rows.Close()
+	log.Println(err)
+	if err != nil {
+		return nil, status.Error(codes.Internal, "Failed to update Note")
+	}
+	var numDeleted int
+	for rows.Next() {
+		numDeleted += 1
+	}
+	log.Println(numDeleted)
+	if numDeleted != 1 {
+		return nil, status.Error(codes.Internal, "Failed to update Note")
+	}
+	if numDeleted == 0 {
+		return nil, status.Errorf(codes.NotFound, "Note with name %q/%q does not Exist", pID, nID)
+	}
+	log.Println("3")
+	return n, nil
 }
 
 // GetNote returns the note with project (pID) and note ID (nID)
 func (pg *OracleDb) GetNote(ctx context.Context, pID, nID string) (*pb.Note, error) {
-	return nil, nil
+	var data string
+	err := pg.DB.QueryRow(searchNote, pID, nID).Scan(&data)
+	switch {
+	case err == sql.ErrNoRows:
+		return nil, status.Errorf(codes.NotFound, "Note with name %q/%q does not Exist", pID, nID)
+	case err != nil:
+		return nil, status.Error(codes.Internal, "Failed to query Note from database")
+	}
+	var note pb.Note
+	proto.UnmarshalText(data, &note)
+	if err != nil {
+		return nil, status.Error(codes.Internal, "Failed to unmarshal Note from database")
+	}
+	// Set the output-only field before returning
+	note.Name = name.FormatNote(pID, nID)
+	return &note, nil
 }
 
 // CreateOccurrence adds the specified occurrence
 func (pg *OracleDb) CreateOccurrence(ctx context.Context, pID, uID string, o *pb.Occurrence) (*pb.Occurrence, error) {
+	o = proto.Clone(o).(*pb.Occurrence)
+	o.CreateTime = ptypes.TimestampNow()
 
+	var id string
+	if nr, err := uuid.NewRandom(); err != nil {
+		return nil, status.Error(codes.Internal, "Failed to generate UUID")
+	} else {
+		id = nr.String()
+	}
+	o.Name = fmt.Sprintf("projects/%s/occurrences/%s", pID, id)
+
+	nPID, nID, err := name.ParseNote(o.NoteName)
+	if err != nil {
+		log.Printf("Invalid note name: %v", o.NoteName)
+		return nil, status.Error(codes.InvalidArgument, "Invalid note name")
+	}
+	_, err = pg.DB.Exec(insertOccurrence, pID, id, nPID, nID, proto.MarshalTextString(o))
+	if err, ok := goracle.AsOraErr(err); ok {
+		// Check for unique_violation
+		//This will never happen because the occurrence name is unique
+		if err.Code() == 1 {
+			return nil, status.Errorf(codes.AlreadyExists, "Occurrence with name %q already exists", o.Name)
+		} else {
+			log.Println("Failed to insert Occurrence in database", err)
+			return nil, status.Error(codes.Internal, "Failed to insert Occurrence in database")
+		}
+	}
 	return o, nil
 }
 
 // BatchCreateOccurrence batch creates the specified occurrences in PostreSQL.
 func (pg *OracleDb) BatchCreateOccurrences(ctx context.Context, pID string, uID string, occs []*pb.Occurrence) ([]*pb.Occurrence, []error) {
-	return nil, nil
+	clonedOccs := []*pb.Occurrence{}
+	for _, o := range occs {
+		clonedOccs = append(clonedOccs, proto.Clone(o).(*pb.Occurrence))
+	}
+	occs = clonedOccs
+
+	errs := []error{}
+	created := []*pb.Occurrence{}
+	for _, o := range occs {
+		occ, err := pg.CreateOccurrence(ctx, pID, uID, o)
+		if err != nil {
+			// Occurrence already exists, skipping.
+			continue
+		} else {
+			created = append(created, occ)
+		}
+	}
+
+	return created, errs
 }
 
+//TODO
 // DeleteOccurrence deletes the occurrence with the given pID and oID
 func (pg *OracleDb) DeleteOccurrence(ctx context.Context, pID, oID string) error {
+	log.Printf(pID)
+	log.Printf(oID)
+
 	return nil
 }
 
@@ -240,13 +378,66 @@ func (pg *OracleDb) UpdateOccurrence(ctx context.Context, pID, oID string, o *pb
 
 // GetOccurrence returns the occurrence with pID and oID
 func (pg *OracleDb) GetOccurrence(ctx context.Context, pID, oID string) (*pb.Occurrence, error) {
-	return nil, nil
+	var data string
+	err := pg.DB.QueryRow(searchOccurrence, pID, oID).Scan(&data)
+	switch {
+	case err == sql.ErrNoRows:
+		return nil, status.Errorf(codes.NotFound, "Occurrence with name %q/%q does not Exist", pID, oID)
+	case err != nil:
+		return nil, status.Error(codes.Internal, "Failed to query Occurrence from database")
+	}
+	var o pb.Occurrence
+	proto.UnmarshalText(data, &o)
+	if err != nil {
+		return nil, status.Error(codes.Internal, "Failed to unmarshal Occurrence from database")
+	}
+	// Set the output-only field before returning
+	o.Name = name.FormatOccurrence(pID, oID)
+	return &o, nil
 }
 
 // ListOccurrences returns up to pageSize number of occurrences for this project beginning
 // at pageToken, or from start if pageToken is the empty string.
 func (pg *OracleDb) ListOccurrences(ctx context.Context, pID, filter, pageToken string, pageSize int32) ([]*pb.Occurrence, string, error) {
-	return nil, "", nil
+	var rows *sql.Rows
+	id := decryptInt64(pageToken, pg.paginationKey, 0)
+	//id := pageToken // decryptInt64(pageToken, pg.paginationKey, 0)
+	//log.Print(id)
+	rows, err := pg.DB.Query(listOccurrences, pID, id, pageSize)
+	if err != nil {
+		return nil, "", status.Error(codes.Internal, "Failed to list Occurrences from database")
+	}
+	count, err := pg.count(occurrenceCount, pID)
+	if err != nil {
+		return nil, "", status.Error(codes.Internal, "Failed to count Occurrences from database")
+	}
+	var os []*pb.Occurrence
+	var lastId int64
+	for rows.Next() {
+		var data string
+		err := rows.Scan(&lastId, &data)
+		//log.Print(lastId)
+		if err != nil {
+			return nil, "", status.Error(codes.Internal, "Failed to scan Occurrences row")
+		}
+		var o pb.Occurrence
+		proto.UnmarshalText(data, &o)
+		if err != nil {
+			return nil, "", status.Error(codes.Internal, "Failed to unmarshal Occurrence from database")
+		}
+		os = append(os, &o)
+	}
+	if count == lastId {
+		return os, "", nil
+	}
+
+	encryptedPage, err := encryptInt64(lastId, pg.paginationKey)
+	if err != nil {
+		return nil, "", status.Error(codes.Internal, "Failed to paginate projects")
+	}
+
+	return os, encryptedPage, nil
+	//return os, strconv.FormatInt(int64(lastId), 10), nil
 }
 
 // GetOccurrenceNote gets the note for the specified occurrence from PostgreSQL.
@@ -257,7 +448,39 @@ func (pg *OracleDb) GetOccurrenceNote(ctx context.Context, pID, oID string) (*pb
 // ListNotes returns up to pageSize number of notes for this project (pID) beginning
 // at pageToken (or from start if pageToken is the empty string).
 func (pg *OracleDb) ListNotes(ctx context.Context, pID, filter, pageToken string, pageSize int32) ([]*pb.Note, string, error) {
-	return nil, "", nil
+	var rows *sql.Rows
+	id := decryptInt64(pageToken, pg.paginationKey, 0)
+	rows, err := pg.DB.Query(listNotes, pID, id, pageSize)
+	if err != nil {
+		return nil, "", status.Error(codes.Internal, "Failed to list Notes from database")
+	}
+	count, err := pg.count(noteCount, pID)
+	if err != nil {
+		return nil, "", status.Error(codes.Internal, "Failed to count Notes from database")
+	}
+	var ns []*pb.Note
+	var lastId int64
+	for rows.Next() {
+		var data string
+		err := rows.Scan(&lastId, &data)
+		if err != nil {
+			return nil, "", status.Error(codes.Internal, "Failed to scan Notes row")
+		}
+		var n pb.Note
+		proto.UnmarshalText(data, &n)
+		if err != nil {
+			return nil, "", status.Error(codes.Internal, "Failed to unmarshal Note from database")
+		}
+		ns = append(ns, &n)
+	}
+	if count == lastId {
+		return ns, "", nil
+	}
+	encryptedPage, err := encryptInt64(lastId, pg.paginationKey)
+	if err != nil {
+		return nil, "", status.Error(codes.Internal, "Failed to paginate projects")
+	}
+	return ns, encryptedPage, nil
 }
 
 // ListNoteOccurrences returns up to pageSize number of occcurrences on the particular note (nID)
