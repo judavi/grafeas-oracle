@@ -3,7 +3,7 @@ RUN apt-get update && \
     apt-get install -y openjdk-8-jdk
 COPY . /go/src/github.com/judavi/grafeas-oracle/
 WORKDIR /go/src/github.com/judavi/grafeas-oracle
-RUN make build pre-test test post-test
+RUN make build 
 WORKDIR /go/src/github.com/judavi/grafeas-oracle/go/v1beta1/main
 RUN GO111MODULE=on CGO_ENABLED=0 go build -o grafeas-server .
 
