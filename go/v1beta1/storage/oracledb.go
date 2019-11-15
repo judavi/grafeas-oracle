@@ -53,11 +53,11 @@ func OracleStorageTypeProvider(storageType string, storageConfig *grafeasConfig.
 }
 
 func NewOracleStore(config *config.OracleConfig) *OracleDb {
-	/*
-		err := createDatabase(CreateSourceString(config.User, config.Password, config.Host, config.DbName), config.DbName)
-		if err != nil {
-			log.Fatal(err.Error())
-		}*/
+
+	err := setupDatabase(CreateSourceString(config.User, config.Password, config.Host, config.DbName), config.DbName)
+	if err != nil {
+		log.Fatal(err.Error())
+	}
 	db, err := sql.Open("goracle", CreateSourceString(config.User, config.Password, config.Host, config.DbName))
 	if err != nil {
 		log.Fatal(err.Error())
@@ -68,47 +68,51 @@ func NewOracleStore(config *config.OracleConfig) *OracleDb {
 	if db.Ping() != nil {
 		log.Fatal("Database server is not alive")
 	}
-	log.Println("Before create tables")
-	/*
-		if _, err := db.Exec(createTables); err != nil {
-			log.Println("Fatal Error")
-			db.Close()
-			log.Fatal(err.Error())
-		}
-	*/
-	log.Println("After create tables")
+
 	return &OracleDb{
 		DB:            db,
 		paginationKey: config.PaginationKey,
 	}
 }
 
-func createDatabase(source, dbName string) error {
+func setupDatabase(source, dbName string) error {
 	db, err := sql.Open("goracle", source)
 	if err != nil {
 		return err
 	}
 	defer db.Close()
-	log.Println("Check if db exists")
+	//log.Println("Check if tables exists")
 	// Check if db exists
-	res, err := db.Exec(
-		fmt.Sprintf("SELECT USERNAME FROM ALL_USERS WHERE USERNAME = '%s'", dbName))
+	var exists int
+	err = db.QueryRow(checkIfTablesExists).Scan(&exists)
 	if err != nil {
 		log.Println(err)
 		return err
 	}
-	rowCnt, err := res.RowsAffected()
-	if err != nil {
-		return err
-	}
-	// Create database if it doesn't exist
-	if rowCnt == 0 {
-		/*
-			_, err = db.Exec(fmt.Sprintf("CREATE DATABASE %s", dbName))
+	if exists == 0 {
+		creationOperations := [9]string{
+			createTableProjects,
+			createTableNotes,
+			createTableOccurrences,
+			createSequenceProjects,
+			createSequenceNotes,
+			createSequenceOccurrences,
+			createTriggerProjects,
+			createTriggerNotes,
+			createTriggerOccurrences,
+		}
+		for _, element := range creationOperations {
+			stmt, err := db.Prepare(element)
 			if err != nil {
 				return err
 			}
-		*/
+			defer stmt.Close()
+			_, err = stmt.Exec()
+			if err != nil {
+				log.Fatal(err)
+			}
+		}
+
 	}
 	return nil
 }
@@ -256,7 +260,6 @@ func (pg *OracleDb) DeleteNote(ctx context.Context, pID, nID string) error {
 	return nil
 }
 
-//TODO
 // UpdateNote updates the existing note with the given pID and nID
 func (pg *OracleDb) UpdateNote(ctx context.Context, pID, nID string, n *pb.Note, mask *fieldmaskpb.FieldMask) (*pb.Note, error) {
 	n = proto.Clone(n).(*pb.Note)
@@ -264,26 +267,18 @@ func (pg *OracleDb) UpdateNote(ctx context.Context, pID, nID string, n *pb.Note,
 	n.Name = nName
 	// TODO(#312): implement the update operation
 	n.UpdateTime = ptypes.TimestampNow()
-	log.Println(pID)
-	log.Println(nID)
-	rows, err := pg.DB.Query(updateNote, pID, nID, "holalala")
-	defer rows.Close()
-	log.Println(err)
+
+	result, err := pg.DB.Exec(updateNote, proto.MarshalTextString(n), pID, nID)
 	if err != nil {
 		return nil, status.Error(codes.Internal, "Failed to update Note")
 	}
-	var numDeleted int
-	for rows.Next() {
-		numDeleted += 1
-	}
-	log.Println(numDeleted)
-	if numDeleted != 1 {
+	count, err := result.RowsAffected()
+	if err != nil {
 		return nil, status.Error(codes.Internal, "Failed to update Note")
 	}
-	if numDeleted == 0 {
+	if count == 0 {
 		return nil, status.Errorf(codes.NotFound, "Note with name %q/%q does not Exist", pID, nID)
 	}
-	log.Println("3")
 	return n, nil
 }
 
@@ -365,15 +360,38 @@ func (pg *OracleDb) BatchCreateOccurrences(ctx context.Context, pID string, uID 
 //TODO
 // DeleteOccurrence deletes the occurrence with the given pID and oID
 func (pg *OracleDb) DeleteOccurrence(ctx context.Context, pID, oID string) error {
-	log.Printf(pID)
-	log.Printf(oID)
-
+	result, err := pg.DB.Exec(deleteOccurrence, pID, oID)
+	if err != nil {
+		return status.Error(codes.Internal, "Failed to delete Occurrence from database")
+	}
+	count, err := result.RowsAffected()
+	if err != nil {
+		return status.Error(codes.Internal, "Failed to delete Occurrence from database")
+	}
+	if count == 0 {
+		return status.Errorf(codes.NotFound, "Occurrence with name %q/%q does not Exist", pID, oID)
+	}
 	return nil
 }
 
 // UpdateOccurrence updates the existing occurrence with the given projectID and occurrenceID
 func (pg *OracleDb) UpdateOccurrence(ctx context.Context, pID, oID string, o *pb.Occurrence, mask *fieldmaskpb.FieldMask) (*pb.Occurrence, error) {
-	return nil, nil
+	o = proto.Clone(o).(*pb.Occurrence)
+	// TODO(#312): implement the update operation
+	o.UpdateTime = ptypes.TimestampNow()
+
+	result, err := pg.DB.Exec(updateOccurrence, proto.MarshalTextString(o), pID, oID)
+	if err != nil {
+		return nil, status.Error(codes.Internal, "Failed to update Occurrence")
+	}
+	count, err := result.RowsAffected()
+	if err != nil {
+		return nil, status.Error(codes.Internal, "Failed to update Occurrence")
+	}
+	if count == 0 {
+		return nil, status.Errorf(codes.NotFound, "Occurrence with name %q/%q does not Exist", pID, oID)
+	}
+	return o, nil
 }
 
 // GetOccurrence returns the occurrence with pID and oID
@@ -512,7 +530,6 @@ func (pg *OracleDb) ListNoteOccurrences(ctx context.Context, pID, nID, filter, p
 	var os []*pb.Occurrence
 	var lastId int64
 	for rows.Next() {
-		log.Print("pepe")
 		var data string
 		err := rows.Scan(&lastId, &data)
 		if err != nil {
@@ -538,6 +555,7 @@ func (pg *OracleDb) ListNoteOccurrences(ctx context.Context, pID, nID, filter, p
 
 // GetVulnerabilityOccurrencesSummary gets a summary of vulnerability occurrences from storage.
 func (pg *OracleDb) GetVulnerabilityOccurrencesSummary(ctx context.Context, projectID, filter string) (*pb.VulnerabilityOccurrencesSummary, error) {
+	//TODO
 	return &pb.VulnerabilityOccurrencesSummary{}, nil
 }
 
@@ -584,6 +602,6 @@ func decryptInt64(encrypted string, key string, defaultValue int64) int64 {
 
 // CreateSourceString generates DB source path.
 func CreateSourceString(user string, password string, host string, dbName string) string {
-	log.Println(fmt.Sprintf("%s/%s@%s/%s", user, password, host, dbName))
+	//log.Println(fmt.Sprintf("%s/%s@%s/%s", user, password, host, dbName))
 	return fmt.Sprintf("%s/%s@%s/%s", user, password, host, dbName)
 }
