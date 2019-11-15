@@ -6,7 +6,8 @@
 # print-%:
 # 	@echo $* = $($*)
 
-.PHONY: build fmt test vet clean generate
+#.PHONY: build fmt test vet clean generate
+.PHONY: build fmt vet clean generate
 
 SRC = $(shell find . -type f -name '*.go' -not -path "./grafeas/grafeas/*")
 CLEAN := *~
@@ -25,9 +26,6 @@ fmt:
 test: generate
 	@go test -v ./...
 
-post-test:
-	bash -c "kill $$(cat test/dynamo.pid)"
-	rm -f test/dynamo.pid
 
 vet: generate
 	@go vet ./...
