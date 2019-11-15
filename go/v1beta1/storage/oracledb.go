@@ -486,7 +486,54 @@ func (pg *OracleDb) ListNotes(ctx context.Context, pID, filter, pageToken string
 // ListNoteOccurrences returns up to pageSize number of occcurrences on the particular note (nID)
 // for this project (pID) projects beginning at pageToken (or from start if pageToken is the empty string).
 func (pg *OracleDb) ListNoteOccurrences(ctx context.Context, pID, nID, filter, pageToken string, pageSize int32) ([]*pb.Occurrence, string, error) {
-	return nil, "", nil
+	// Verify that note exists
+	if _, err := pg.GetNote(ctx, pID, nID); err != nil {
+		return nil, "", err
+	}
+	var rows *sql.Rows
+	id := decryptInt64(pageToken, pg.paginationKey, 0)
+
+	if pageSize == 0 {
+		pageSize = 10
+	}
+	log.Print(pID)
+	log.Print(nID)
+	log.Print(id)
+	log.Print(pageSize)
+	rows, err := pg.DB.Query(listNoteOccurrences, pID, nID, id, pageSize)
+	if err != nil {
+		return nil, "", status.Error(codes.Internal, "Failed to list Occurrences from database")
+	}
+
+	count, err := pg.count(noteOccurrencesCount, pID, nID)
+	if err != nil {
+		return nil, "", status.Error(codes.Internal, "Failed to count Occurrences from database")
+	}
+	var os []*pb.Occurrence
+	var lastId int64
+	for rows.Next() {
+		log.Print("pepe")
+		var data string
+		err := rows.Scan(&lastId, &data)
+		if err != nil {
+			return nil, "", status.Error(codes.Internal, "Failed to scan Occurrences row")
+		}
+		var o pb.Occurrence
+		proto.UnmarshalText(data, &o)
+		if err != nil {
+			return nil, "", status.Error(codes.Internal, "Failed to unmarshal Occurrence from database")
+		}
+		os = append(os, &o)
+	}
+	if count == lastId {
+		return os, "", nil
+	}
+	encryptedPage, err := encryptInt64(lastId, pg.paginationKey)
+	if err != nil {
+		return nil, "", status.Error(codes.Internal, "Failed to paginate projects")
+	}
+	return os, encryptedPage, nil
+
 }
 
 // GetVulnerabilityOccurrencesSummary gets a summary of vulnerability occurrences from storage.

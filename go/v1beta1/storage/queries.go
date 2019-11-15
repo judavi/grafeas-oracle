@@ -89,13 +89,13 @@ const (
 	deleteNote          = `DELETE FROM notes WHERE project_name = :1 AND note_name = :2`
 	listNotes           = `SELECT id, data FROM notes WHERE project_name = :1 AND id > :2 AND rownum <= :3`
 	noteCount           = `SELECT COUNT(*) FROM notes WHERE project_name = :1`
-	listNoteOccurrences = `SELECT o.id, o.data FROM occurrences as o, notes as n
+	listNoteOccurrences = `SELECT o.id, o.data FROM occurrences o, notes n
 													WHERE n.id = o.note_id
 														AND n.project_name = :1
 														AND n.note_name = :2
 														AND o.id > :3 AND rownum <= :4`
 
-	noteOccurrencesCount = `SELECT COUNT(*) FROM occurrences as o, notes as n
+	noteOccurrencesCount = `SELECT COUNT(*) FROM occurrences o, notes  n
 	                         WHERE n.id = o.note_id
 	                           AND n.project_name = :1
 	                           AND n.note_name = :2`
