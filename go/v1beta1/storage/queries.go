@@ -10,11 +10,11 @@ const (
 	createSequenceProjects = `CREATE SEQUENCE projects_seq START WITH 1 INCREMENT BY 1`
 	createTriggerProjects  = `		
 			CREATE OR REPLACE TRIGGER projects_seq_tr
-			BEFORE INSERT ON projects FOR EACH ROW
-			WHEN (NEW.id IS NULL)
-			BEGIN
-			SELECT projects_seq.NEXTVAL INTO :NEW.id FROM DUAL;
-		END`
+				BEFORE INSERT ON projects FOR EACH ROW
+				WHEN (NEW.id IS NULL)
+				BEGIN
+					SELECT projects_seq.NEXTVAL INTO :NEW.id FROM DUAL;
+				END;`
 	createTableNotes = `
 			CREATE TABLE notes (
 				id NUMBER(10) PRIMARY KEY,
@@ -30,8 +30,8 @@ const (
 			BEFORE INSERT ON notes FOR EACH ROW
 			WHEN (NEW.id IS NULL)
 			BEGIN
-		SELECT notes_seq.NEXTVAL INTO :NEW.id FROM DUAL;
-		END`
+				SELECT notes_seq.NEXTVAL INTO :NEW.id FROM DUAL;
+			END;`
 
 	createTableOccurrences = `
 			CREATE TABLE occurrences (
@@ -49,8 +49,8 @@ const (
 			BEFORE INSERT ON occurrences FOR EACH ROW
 			WHEN (NEW.id IS NULL)
 			BEGIN
-		SELECT occurrences_seq.NEXTVAL INTO :NEW.id FROM DUAL;
-		END
+				SELECT occurrences_seq.NEXTVAL INTO :NEW.id FROM DUAL;
+			END;
 		`
 
 	checkIfTablesExists = `SELECT count(*) as count FROM dba_tables where table_name IN ('PROJECTS', 'NOTES', 'OCCURRENCES', 'OPERATIONS')`

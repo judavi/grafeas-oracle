@@ -1,0 +1,14 @@
+version: '3'
+services:
+  server:
+    build: .
+    ports:
+      - '8080:8080'
+    depends_on:
+      - db
+  db:
+    image: 'epiclabs/docker-oracle-xe-11g'
+    ports: 
+      - '49162:1521'
+    environment:
+      - ORACLE_ALLOW_REMOTE=true

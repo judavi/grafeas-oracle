@@ -1,0 +1,22 @@
+grafeas:
+  api:
+    # Endpoint address
+    address: "0.0.0.0:8080"
+    # PKI configuration (optional)
+    cafile: 
+    keyfile: 
+    certfile: 
+    # CORS configuration (optional)
+    cors_allowed_origins:
+      # - "http://example.net"
+  storage_type: oracle
+  oracle:
+    # Database host
+    host: "10.140.36.132:49162"
+    # Database name
+    dbname: "xe"
+    # Database username
+    user: "system"
+    # Database password
+    password: "oracle"
+    paginationkey: "JGMZNCmpDjpN2Jz10wMcF9kXc1vM8QC1nuxHB2gjIgY="

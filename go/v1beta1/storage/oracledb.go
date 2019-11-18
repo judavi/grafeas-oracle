@@ -197,7 +197,7 @@ func (pg *OracleDb) ListProjects(ctx context.Context, filter string, pageSize in
 		return nil, "", status.Error(codes.Internal, "Failed to paginate projects")
 	}
 
-	return nil, encryptedPage, nil
+	return projects, encryptedPage, nil
 }
 
 // CreateNote adds the specified note
