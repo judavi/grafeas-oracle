@@ -14,7 +14,7 @@ jobs:
 
       - name: Log in to registry
         if: github.ref == 'refs/heads/master'
-        run: docker login docker.pkg.github.com -u ${{ github.actor }} -p ${{ secrets.package_registry_token }}
+        run: docker login docker.pkg.github.com -u ${{ github.actor }} -p ${{ secrets.GITHUB_TOKEN }}
 
       # this will cause an issue if we run two jobs simultaneously and the latest one finishes after the first
       # we can get around this later by doing semver properly
