@@ -23,6 +23,13 @@ Testing is performed against a Oracle instance.  To make the thisngs easier I'm 
 docker run -d -p 49162:1521 -e ORACLE_ALLOW_REMOTE=true epiclabs/docker-oracle-xe-11g
 ```
 
+Also you can run the docker-compose.yml to start an instance with DB included
+```
+cd test
+docker-compose build
+docker-compose up
+```
+
 ## Configuring
 The server looks for a configuration file that is passed in via the --config argument. That file should be in YAML format and follows the specification laid down by the main Grafeas project. 
 
