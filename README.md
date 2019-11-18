@@ -86,7 +86,7 @@ Pull requests welcome.
 
 ### Special thanks
 
-Thanks to @Jhon-tipper and his awesome implementation of [DynamoDB](https://github.com/john-tipper/grafeas-dynamodb) 
+Thanks to [Jhon-tipper](https://github.com/john-tipper/grafeas-dynamodb) and his awesome implementation of [DynamoDB](https://github.com/john-tipper/grafeas-dynamodb) and the [Grafeas Team](https://github.com/grafeas/grafeas)
 
 ## License
 
