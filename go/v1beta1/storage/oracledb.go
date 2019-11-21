@@ -6,11 +6,13 @@ import (
 	"fmt"
 	"log"
 	"strconv"
+	"strings"
 	"time"
 
 	"database/sql"
 
 	"github.com/fernet/fernet-go"
+	"github.com/golang/protobuf/jsonpb"
 	"github.com/golang/protobuf/proto"
 	"github.com/golang/protobuf/ptypes"
 	"github.com/google/uuid"
@@ -81,7 +83,6 @@ func setupDatabase(source, dbName string) error {
 		return err
 	}
 	defer db.Close()
-	//log.Println("Check if tables exists")
 	// Check if db exists
 	var exists int
 	err = db.QueryRow(checkIfTablesExists).Scan(&exists)
@@ -206,8 +207,10 @@ func (pg *OracleDb) CreateNote(ctx context.Context, pID, nID, uID string, n *pb.
 	nName := name.FormatNote(pID, nID)
 	n.Name = nName
 	n.CreateTime = ptypes.TimestampNow()
+	m := jsonpb.Marshaler{}
+	protoToJson, _ := m.MarshalToString(n)
 
-	_, err := pg.DB.Exec(insertNote, pID, nID, proto.MarshalTextString(n))
+	_, err := pg.DB.Exec(insertNote, pID, nID, protoToJson)
 	if err, ok := goracle.AsOraErr(err); ok {
 		// Check for unique_violation
 		if err.Code() == 1 {
@@ -267,8 +270,10 @@ func (pg *OracleDb) UpdateNote(ctx context.Context, pID, nID string, n *pb.Note,
 	n.Name = nName
 	// TODO(#312): implement the update operation
 	n.UpdateTime = ptypes.TimestampNow()
+	m := jsonpb.Marshaler{}
+	protoToJson, _ := m.MarshalToString(n)
 
-	result, err := pg.DB.Exec(updateNote, proto.MarshalTextString(n), pID, nID)
+	result, err := pg.DB.Exec(updateNote, protoToJson, pID, nID)
 	if err != nil {
 		return nil, status.Error(codes.Internal, "Failed to update Note")
 	}
@@ -293,7 +298,7 @@ func (pg *OracleDb) GetNote(ctx context.Context, pID, nID string) (*pb.Note, err
 		return nil, status.Error(codes.Internal, "Failed to query Note from database")
 	}
 	var note pb.Note
-	proto.UnmarshalText(data, &note)
+	err = jsonpb.Unmarshal(strings.NewReader(data), &note)
 	if err != nil {
 		return nil, status.Error(codes.Internal, "Failed to unmarshal Note from database")
 	}
@@ -320,7 +325,9 @@ func (pg *OracleDb) CreateOccurrence(ctx context.Context, pID, uID string, o *pb
 		log.Printf("Invalid note name: %v", o.NoteName)
 		return nil, status.Error(codes.InvalidArgument, "Invalid note name")
 	}
-	_, err = pg.DB.Exec(insertOccurrence, pID, id, nPID, nID, proto.MarshalTextString(o))
+	m := jsonpb.Marshaler{}
+	protoToJson, _ := m.MarshalToString(o)
+	_, err = pg.DB.Exec(insertOccurrence, pID, id, nPID, nID, protoToJson)
 	if err, ok := goracle.AsOraErr(err); ok {
 		// Check for unique_violation
 		//This will never happen because the occurrence name is unique
@@ -379,8 +386,10 @@ func (pg *OracleDb) UpdateOccurrence(ctx context.Context, pID, oID string, o *pb
 	o = proto.Clone(o).(*pb.Occurrence)
 	// TODO(#312): implement the update operation
 	o.UpdateTime = ptypes.TimestampNow()
+	m := jsonpb.Marshaler{}
+	protoToJson, _ := m.MarshalToString(o)
 
-	result, err := pg.DB.Exec(updateOccurrence, proto.MarshalTextString(o), pID, oID)
+	result, err := pg.DB.Exec(updateOccurrence, protoToJson, pID, oID)
 	if err != nil {
 		return nil, status.Error(codes.Internal, "Failed to update Occurrence")
 	}
@@ -405,7 +414,7 @@ func (pg *OracleDb) GetOccurrence(ctx context.Context, pID, oID string) (*pb.Occ
 		return nil, status.Error(codes.Internal, "Failed to query Occurrence from database")
 	}
 	var o pb.Occurrence
-	proto.UnmarshalText(data, &o)
+	err = jsonpb.Unmarshal(strings.NewReader(data), &o)
 	if err != nil {
 		return nil, status.Error(codes.Internal, "Failed to unmarshal Occurrence from database")
 	}
@@ -439,7 +448,7 @@ func (pg *OracleDb) ListOccurrences(ctx context.Context, pID, filter, pageToken 
 			return nil, "", status.Error(codes.Internal, "Failed to scan Occurrences row")
 		}
 		var o pb.Occurrence
-		proto.UnmarshalText(data, &o)
+		err = jsonpb.Unmarshal(strings.NewReader(data), &o)
 		if err != nil {
 			return nil, "", status.Error(codes.Internal, "Failed to unmarshal Occurrence from database")
 		}
@@ -485,7 +494,7 @@ func (pg *OracleDb) ListNotes(ctx context.Context, pID, filter, pageToken string
 			return nil, "", status.Error(codes.Internal, "Failed to scan Notes row")
 		}
 		var n pb.Note
-		proto.UnmarshalText(data, &n)
+		err = jsonpb.Unmarshal(strings.NewReader(data), &n)
 		if err != nil {
 			return nil, "", status.Error(codes.Internal, "Failed to unmarshal Note from database")
 		}
@@ -536,7 +545,7 @@ func (pg *OracleDb) ListNoteOccurrences(ctx context.Context, pID, nID, filter, p
 			return nil, "", status.Error(codes.Internal, "Failed to scan Occurrences row")
 		}
 		var o pb.Occurrence
-		proto.UnmarshalText(data, &o)
+		err = jsonpb.Unmarshal(strings.NewReader(data), &o)
 		if err != nil {
 			return nil, "", status.Error(codes.Internal, "Failed to unmarshal Occurrence from database")
 		}
