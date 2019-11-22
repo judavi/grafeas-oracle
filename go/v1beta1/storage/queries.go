@@ -21,7 +21,8 @@ const (
 				project_name VARCHAR2(3000) NOT NULL,
 				note_name VARCHAR2(3000) NOT NULL,
 				data CLOB,
-				UNIQUE (project_name, note_name)
+				UNIQUE (project_name, note_name),
+				CONSTRAINT notes_json CHECK (data IS JSON)
 			)
 		`
 	createSequenceNotes = `CREATE SEQUENCE notes_seq START WITH 1 INCREMENT BY 1`
@@ -40,7 +41,8 @@ const (
 				occurrence_name VARCHAR2(3000) NOT NULL,
 				data CLOB,
 				note_id number(10) REFERENCES notes NOT NULL,
-				UNIQUE (project_name, occurrence_name)
+				UNIQUE (project_name, occurrence_name),
+				CONSTRAINT occurrences_json CHECK (data IS JSON)
 			)
 		`
 	createSequenceOccurrences = `CREATE SEQUENCE occurrences_seq START WITH 1 INCREMENT BY 1`
