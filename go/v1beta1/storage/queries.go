@@ -55,34 +55,55 @@ const (
 			END;
 		`
 
-	checkIfTablesExists = `SELECT count(*) as count FROM dba_tables where table_name IN ('PROJECTS', 'NOTES', 'OCCURRENCES', 'OPERATIONS')`
+	checkIfTablesExists = `SELECT count(*) as count FROM SYS.dba_tables where table_name IN ('PROJECTS', 'NOTES', 'OCCURRENCES', 'OPERATIONS')`
 
 	insertProject = `INSERT INTO projects(name) VALUES (:1)`
 	projectExists = `SELECT count(*) as "exists" FROM projects WHERE name = :1`
 	deleteProject = `DELETE FROM projects WHERE name = :1`
-	listProjects  = `SELECT id, name FROM projects WHERE id > :1 AND rownum <= :2`
+	listProjects  = `SELECT ROW_NUMBER() OVER (ORDER BY id), name FROM projects ORDER BY id OFFSET :2 ROWS FETCH FIRST :3 ROWS ONLY`
 	projectCount  = `SELECT COUNT(*) FROM projects`
 
 	insertOccurrence = `INSERT INTO occurrences(project_name, occurrence_name, note_id, data)
                       VALUES (:1, :2, (SELECT id FROM notes WHERE project_name = :3 AND note_name = :4), :5)`
-	searchOccurrence = `SELECT data FROM occurrences WHERE project_name = :1 AND occurrence_name = :2`
-	updateOccurrence = `UPDATE occurrences SET data = :1 WHERE project_name = :2 AND occurrence_name = :3`
-	deleteOccurrence = `DELETE FROM occurrences WHERE project_name = :1 AND occurrence_name = :2`
-	listOccurrences  = `SELECT id, data FROM occurrences WHERE project_name = :1 AND id > :2 AND rownum <= :3 `
-	occurrenceCount  = `SELECT COUNT(*) FROM occurrences WHERE project_name = :1`
+	searchOccurrence        = `SELECT data FROM occurrences WHERE project_name = :1 AND occurrence_name = :2`
+	updateOccurrence        = `UPDATE occurrences SET data = :1 WHERE project_name = :2 AND occurrence_name = :3`
+	deleteOccurrence        = `DELETE FROM occurrences WHERE project_name = :1 AND occurrence_name = :2`
+	listOccurrences         = `SELECT ROW_NUMBER() OVER (ORDER BY id), data FROM occurrences WHERE project_name = :1 ORDER BY id OFFSET :3 ROWS FETCH FIRST :4 ROWS ONLY`
+	listOccurrencesFiltered = `SELECT ID, DATA FROM (SELECT
+																ROW_NUMBER() OVER (ORDER BY id) AS ID,
+																o.data AS data,
+																o.data."resource".uri AS URI,
+																o.data.kind AS KIND,
+																o.PROJECT_NAME AS PROJECT_NAME
+															FROM OCCURRENCES o
+															WHERE
+																PROJECT_NAME = :1
+																AND o.data.kind = :2
+																AND o.data."resource".uri = :3
+															ORDER BY id OFFSET :4 ROWS FETCH FIRST :5 ROWS ONLY)`
+	occurrenceCount         = `SELECT COUNT(*) FROM occurrences WHERE project_name = :1`
+	occurrenceCountFiltered = `SELECT COUNT(*) FROM (
+															SELECT
+																o.DATA."resource".uri AS URI,
+																o.data.kind AS KIND,
+																o.PROJECT_NAME AS PROJECT_NAME
+															FROM OCCURRENCES o
+															WHERE
+																PROJECT_NAME = :1
+																AND o.data.kind = :2
+																AND o.DATA."resource".uri = :3)`
 
 	insertNote          = `INSERT INTO notes(project_name, note_name, data) VALUES (:1, :2, :3)`
 	searchNote          = `SELECT data FROM notes WHERE project_name = :1 AND note_name = :2`
 	updateNote          = `UPDATE notes SET data = :1 WHERE project_name = :2 AND note_name = :3`
 	deleteNote          = `DELETE FROM notes WHERE project_name = :1 AND note_name = :2`
-	listNotes           = `SELECT id, data FROM notes WHERE project_name = :1 AND id > :2 AND rownum <= :3`
+	listNotes           = `SELECT ROW_NUMBER() OVER (ORDER BY id), data FROM notes WHERE project_name = :1 ORDER BY id OFFSET :3 ROWS FETCH FIRST :4 ROWS ONLY`
 	noteCount           = `SELECT COUNT(*) FROM notes WHERE project_name = :1`
-	listNoteOccurrences = `SELECT o.id, o.data FROM occurrences o, notes n
+	listNoteOccurrences = `SELECT T as id, data(SELECT ROW_NUMBER() OVER (ORDER BY o.id) AS T , o.id, o.data FROM occurrences o, notes n
 													WHERE n.id = o.note_id
 														AND n.project_name = :1
 														AND n.note_name = :2
-														AND o.id > :3 AND rownum <= :4`
-
+														ORDER BY T OFFSET :3 ROWS FETCH FIRST :4 ROWS ONLY)`
 	noteOccurrencesCount = `SELECT COUNT(*) FROM occurrences o, notes  n
 	                         WHERE n.id = o.note_id
 	                           AND n.project_name = :1

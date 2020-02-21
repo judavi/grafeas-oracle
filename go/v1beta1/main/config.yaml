@@ -12,7 +12,7 @@ grafeas:
   storage_type: oracle
   oracle:
     # Database host
-    host: "localhost:49162"
+    host: "localhost:1521"
     # Database name
     dbname: "xe"
     # Database username

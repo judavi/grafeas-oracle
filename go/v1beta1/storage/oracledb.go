@@ -427,14 +427,41 @@ func (pg *OracleDb) GetOccurrence(ctx context.Context, pID, oID string) (*pb.Occ
 // at pageToken, or from start if pageToken is the empty string.
 func (pg *OracleDb) ListOccurrences(ctx context.Context, pID, filter, pageToken string, pageSize int32) ([]*pb.Occurrence, string, error) {
 	var rows *sql.Rows
+	var count int64
+	var err error
 	id := decryptInt64(pageToken, pg.paginationKey, 0)
 	//id := pageToken // decryptInt64(pageToken, pg.paginationKey, 0)
-	//log.Print(id)
-	rows, err := pg.DB.Query(listOccurrences, pID, id, pageSize)
+	if filter != "" {
+		// resource_url=%q AND kind=%q
+		// log.Print("Filtered query")
+		// log.Print(filter)
+		s := strings.Split(filter, "=")
+		resource := strings.Split(s[1], " AND ")
+		kind := s[2]
+		if s[2] == "PACKAGE_VULNERABILITY" {
+			kind = "VULNERABILITY"
+		}
+		rows, err = pg.DB.Query(listOccurrencesFiltered, pID, kind, resource[0], id, pageSize)
+	} else {
+		rows, err = pg.DB.Query(listOccurrences, pID, id, pageSize)
+	}
 	if err != nil {
+		log.Print(err)
 		return nil, "", status.Error(codes.Internal, "Failed to list Occurrences from database")
 	}
-	count, err := pg.count(occurrenceCount, pID)
+	if filter != "" {
+		s := strings.Split(filter, "=")
+		resource := strings.Split(s[1], " AND ")
+		kind := s[2]
+		if s[2] == "PACKAGE_VULNERABILITY" {
+			kind = "VULNERABILITY"
+		}
+		count, err = pg.count(occurrenceCountFiltered, pID, kind, resource[0])
+	} else {
+		count, err = pg.count(occurrenceCount, pID)
+		log.Print("count")
+		log.Print(count)
+	}
 	if err != nil {
 		return nil, "", status.Error(codes.Internal, "Failed to count Occurrences from database")
 	}
@@ -457,7 +484,7 @@ func (pg *OracleDb) ListOccurrences(ctx context.Context, pID, filter, pageToken 
 	if count == lastId {
 		return os, "", nil
 	}
-
+	//esta encriptando el LastID... tengo que ver como se que pagino
 	encryptedPage, err := encryptInt64(lastId, pg.paginationKey)
 	if err != nil {
 		return nil, "", status.Error(codes.Internal, "Failed to paginate projects")
@@ -478,6 +505,7 @@ func (pg *OracleDb) ListNotes(ctx context.Context, pID, filter, pageToken string
 	var rows *sql.Rows
 	id := decryptInt64(pageToken, pg.paginationKey, 0)
 	rows, err := pg.DB.Query(listNotes, pID, id, pageSize)
+	log.Print("List Notes")
 	if err != nil {
 		return nil, "", status.Error(codes.Internal, "Failed to list Notes from database")
 	}

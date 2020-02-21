@@ -20,7 +20,7 @@ docker build --rm .
 
 Testing is performed against a Oracle instance.  To make the thisngs easier I'm using 
 ```
-docker run -d -p 49162:1521 -e ORACLE_ALLOW_REMOTE=true epiclabs/docker-oracle-xe-11g
+ docker run -d -p 1521:1521 quay.io/maksymbilenko/oracle-12c
 ```
 
 Also you can run the docker-compose.yml to start an instance with DB included
