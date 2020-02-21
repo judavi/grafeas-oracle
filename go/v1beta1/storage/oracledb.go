@@ -505,7 +505,6 @@ func (pg *OracleDb) ListNotes(ctx context.Context, pID, filter, pageToken string
 	var rows *sql.Rows
 	id := decryptInt64(pageToken, pg.paginationKey, 0)
 	rows, err := pg.DB.Query(listNotes, pID, id, pageSize)
-	log.Print("List Notes")
 	if err != nil {
 		return nil, "", status.Error(codes.Internal, "Failed to list Notes from database")
 	}
