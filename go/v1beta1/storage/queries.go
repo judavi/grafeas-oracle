@@ -69,29 +69,22 @@ const (
 	updateOccurrence        = `UPDATE occurrences SET data = :1 WHERE project_name = :2 AND occurrence_name = :3`
 	deleteOccurrence        = `DELETE FROM occurrences WHERE project_name = :1 AND occurrence_name = :2`
 	listOccurrences         = `SELECT ROW_NUMBER() OVER (ORDER BY id), data FROM occurrences WHERE project_name = :1 ORDER BY id OFFSET :3 ROWS FETCH FIRST :4 ROWS ONLY`
-	listOccurrencesFiltered = `SELECT ID, DATA FROM (SELECT
-																ROW_NUMBER() OVER (ORDER BY id) AS ID,
-																o.data AS data,
-																o.data."resource".uri AS URI,
-																o.data.kind AS KIND,
-																o.PROJECT_NAME AS PROJECT_NAME
-															FROM OCCURRENCES o
+	listOccurrencesFiltered = `SELECT id, data FROM (SELECT
+																ROW_NUMBER() OVER (ORDER BY id) AS id,
+																o.data AS data
+															FROM occurrences o
 															WHERE
-																PROJECT_NAME = :1
+															  project_name = :1
 																AND o.data.kind = :2
 																AND o.data."resource".uri = :3
 															ORDER BY id OFFSET :4 ROWS FETCH FIRST :5 ROWS ONLY)`
 	occurrenceCount         = `SELECT COUNT(*) FROM occurrences WHERE project_name = :1`
-	occurrenceCountFiltered = `SELECT COUNT(*) FROM (
-															SELECT
-																o.DATA."resource".uri AS URI,
-																o.data.kind AS KIND,
-																o.PROJECT_NAME AS PROJECT_NAME
-															FROM OCCURRENCES o
+	occurrenceCountFiltered = `SELECT COUNT(*)
+															FROM occurrences o
 															WHERE
-																PROJECT_NAME = :1
+															  project_name = :1
 																AND o.data.kind = :2
-																AND o.DATA."resource".uri = :3)`
+																AND o.data."resource".uri = :3`
 
 	insertNote          = `INSERT INTO notes(project_name, note_name, data) VALUES (:1, :2, :3)`
 	searchNote          = `SELECT data FROM notes WHERE project_name = :1 AND note_name = :2`

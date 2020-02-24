@@ -431,17 +431,31 @@ func (pg *OracleDb) ListOccurrences(ctx context.Context, pID, filter, pageToken 
 	var err error
 	id := decryptInt64(pageToken, pg.paginationKey, 0)
 	//id := pageToken // decryptInt64(pageToken, pg.paginationKey, 0)
+	kind := "VULNERABILITY"
+	res := ""
 	if filter != "" {
 		// resource_url=%q AND kind=%q
-		// log.Print("Filtered query")
-		// log.Print(filter)
+		log.Print("Filtered query")
+		log.Print(filter)
 		s := strings.Split(filter, "=")
 		resource := strings.Split(s[1], " AND ")
-		kind := s[2]
-		if s[2] == "PACKAGE_VULNERABILITY" {
+		res = strings.Trim(resource[0], `"`)
+		kind = strings.Trim(s[2], `"`)
+		if strings.Compare(kind, "PACKAGE_VULNERABILITY") == 0 {
 			kind = "VULNERABILITY"
 		}
-		rows, err = pg.DB.Query(listOccurrencesFiltered, pID, kind, resource[0], id, pageSize)
+		log.Print("pID")
+		log.Print(pID)
+		log.Print("Resource")
+		log.Print(res)
+		log.Print("Kind")
+		log.Print(kind)
+		log.Print("id")
+		log.Print(id)
+		log.Print("pageSize")
+		log.Print(pageSize)
+
+		rows, err = pg.DB.Query(listOccurrencesFiltered, pID, kind, res, id, pageSize)
 	} else {
 		rows, err = pg.DB.Query(listOccurrences, pID, id, pageSize)
 	}
@@ -450,13 +464,10 @@ func (pg *OracleDb) ListOccurrences(ctx context.Context, pID, filter, pageToken 
 		return nil, "", status.Error(codes.Internal, "Failed to list Occurrences from database")
 	}
 	if filter != "" {
-		s := strings.Split(filter, "=")
-		resource := strings.Split(s[1], " AND ")
-		kind := s[2]
-		if s[2] == "PACKAGE_VULNERABILITY" {
-			kind = "VULNERABILITY"
-		}
-		count, err = pg.count(occurrenceCountFiltered, pID, kind, resource[0])
+		log.Print("Filtered count")
+		count, err = pg.count(occurrenceCountFiltered, pID, kind, res)
+		log.Print("f count")
+		log.Print(count)
 	} else {
 		count, err = pg.count(occurrenceCount, pID)
 		log.Print("count")
@@ -484,11 +495,13 @@ func (pg *OracleDb) ListOccurrences(ctx context.Context, pID, filter, pageToken 
 	if count == lastId {
 		return os, "", nil
 	}
-	//esta encriptando el LastID... tengo que ver como se que pagino
+
 	encryptedPage, err := encryptInt64(lastId, pg.paginationKey)
 	if err != nil {
 		return nil, "", status.Error(codes.Internal, "Failed to paginate projects")
 	}
+	log.Print("occurrences total")
+	log.Print(len(os))
 
 	return os, encryptedPage, nil
 	//return os, strconv.FormatInt(int64(lastId), 10), nil
