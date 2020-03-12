@@ -92,7 +92,7 @@ const (
 	deleteNote          = `DELETE FROM notes WHERE project_name = :1 AND note_name = :2`
 	listNotes           = `SELECT ROW_NUMBER() OVER (ORDER BY id), data FROM notes WHERE project_name = :1 ORDER BY id OFFSET :3 ROWS FETCH FIRST :4 ROWS ONLY`
 	noteCount           = `SELECT COUNT(*) FROM notes WHERE project_name = :1`
-	listNoteOccurrences = `SELECT T as id, data(SELECT ROW_NUMBER() OVER (ORDER BY o.id) AS T , o.id, o.data FROM occurrences o, notes n
+	listNoteOccurrences = `SELECT T as id, data FROM (SELECT ROW_NUMBER() OVER (ORDER BY o.id) AS T , o.id, o.data FROM occurrences o, notes n
 													WHERE n.id = o.note_id
 														AND n.project_name = :1
 														AND n.note_name = :2
