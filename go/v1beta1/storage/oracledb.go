@@ -318,7 +318,11 @@ func (pg *OracleDb) CreateOccurrence(ctx context.Context, pID, uID string, o *pb
 	} else {
 		id = nr.String()
 	}
-	o.Name = fmt.Sprintf("projects/%s/occurrences/%s", pID, id)
+	if len(o.Name) == 0 {
+		o.Name = fmt.Sprintf("projects/%s/occurrences/%s", pID, id)
+	} else {
+		id = strings.Replace(o.Name, fmt.Sprintf("projects/%s/occurrences/", pID), "", -1)
+	}
 
 	nPID, nID, err := name.ParseNote(o.NoteName)
 	if err != nil {
