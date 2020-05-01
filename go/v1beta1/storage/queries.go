@@ -55,7 +55,14 @@ const (
 			END;
 		`
 
-	checkIfTablesExists = `SELECT count(*) as count FROM SYS.dba_tables where table_name IN ('PROJECTS', 'NOTES', 'OCCURRENCES', 'OPERATIONS')`
+	checkIfTablesExists = `SELECT sum(count) AS count
+							FROM (
+								SELECT count(*)  AS count FROM SYS.dba_tables
+				   					where table_name IN ('PROJECTS', 'NOTES', 'OCCURRENCES', 'OPERATIONS')
+		 					    UNION ALL
+		 						SELECT count(*) AS count FROM SYS.dba_views
+									   where view_name IN ('PROJECTS', 'NOTES', 'OCCURRENCES', 'OPERATIONS')
+							)`
 
 	insertProject = `INSERT INTO projects(name) VALUES (:1)`
 	projectExists = `SELECT count(*) as "exists" FROM projects WHERE name = :1`
@@ -64,7 +71,8 @@ const (
 	projectCount  = `SELECT COUNT(*) FROM projects`
 
 	insertOccurrence = `INSERT INTO occurrences(project_name, occurrence_name, note_id, data)
-                      VALUES (:1, :2, (SELECT id FROM notes WHERE project_name = :3 AND note_name = :4), :5)`
+					  		VALUES (:1, :2, (SELECT id FROM notes WHERE 
+							project_name = :3 AND note_name = :4), :5)`
 	searchOccurrence        = `SELECT data FROM occurrences WHERE project_name = :1 AND occurrence_name = :2`
 	updateOccurrence        = `UPDATE occurrences SET data = :1 WHERE project_name = :2 AND occurrence_name = :3`
 	deleteOccurrence        = `DELETE FROM occurrences WHERE project_name = :1 AND occurrence_name = :2`
@@ -91,7 +99,7 @@ const (
 	updateNote          = `UPDATE notes SET data = :1 WHERE project_name = :2 AND note_name = :3`
 	deleteNote          = `DELETE FROM notes WHERE project_name = :1 AND note_name = :2`
 	listNotes           = `SELECT ROW_NUMBER() OVER (ORDER BY id), data FROM notes WHERE project_name = :1 ORDER BY id OFFSET :3 ROWS FETCH FIRST :4 ROWS ONLY`
-	noteCount           = `SELECT COUNT(*) FROM notes WHERE project_name = :1`
+	noteCount           = `SELECT COUNT(*) as COUNT FROM notes WHERE PROJECT_NAME = :1`
 	listNoteOccurrences = `SELECT T as id, data FROM (SELECT ROW_NUMBER() OVER (ORDER BY o.id) AS T , o.id, o.data FROM occurrences o, notes n
 													WHERE n.id = o.note_id
 														AND n.project_name = :1
